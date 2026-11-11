@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CDAC Kharghar | Task Manager</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/cdac-logo.svg') }}">
+  <script>
+    /* set theme before paint to avoid a flash */
+    (function () {
+      var t = null;
+      try { t = JSON.parse(localStorage.getItem('cdac_theme')); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') t = null;
+      if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <!-- Put the official logo at static/img/cdac-logo.png. Falls back to the SVG placeholder. -->
+      <img class="logo" alt="CDAC logo"
+           src="{{ url_for('static', filename='img/cdac-logo.png') }}"
+           onerror="this.onerror=null;this.src='{{ url_for('static', filename='img/cdac-logo.svg') }}'">
+      <div>
+        <h1>CDAC Kharghar</h1>
+        <p>Task Manager</p>
+      </div>
+    </div>
+
+    <label class="searchbox">
+      <span aria-hidden="true">🔍</span>
+      <input id="search" type="search" placeholder="Search tasks..." autocomplete="off">
+      <kbd>/</kbd>
+    </label>
+
+    <div class="top-actions">
+      <button id="themeBtn" class="round-btn" type="button" title="Toggle theme (T)">🌙</button>
+      <button id="profileBtn" class="profile-chip" type="button" title="Profile">
+        <span id="avatar" class="avatar">🎓</span>
+        <span id="chipName">Set up profile</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <section class="hero">
+      <div>
+        <p id="today" class="eyebrow"></p>
+        <h2 id="greeting">Hello!</h2>
+        <p id="tagline" class="tagline">Plan your assignments, labs and project deadlines.</p>
+      </div>
+      <div class="ring-wrap" title="Overall progress">
+        <svg viewBox="0 0 80 80" class="ring">
+          <circle class="ring-bg" cx="40" cy="40" r="34"></circle>
+          <circle id="ringFg" class="ring-fg" cx="40" cy="40" r="34"></circle>
+        </svg>
+        <div class="ring-text"><b id="ringPct">0%</b><small>done</small></div>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat s-total"><span id="statTotal" data-v="0">0</span><small>Total</small></div>
+      <div class="stat s-progress"><span id="statProgress" data-v="0">0</span><small>In progress</small></div>
+      <div class="stat s-done"><span id="statDone" data-v="0">0</span><small>Completed</small></div>
+      <div class="stat s-overdue"><span id="statOverdue" data-v="0">0</span><small>Overdue</small></div>
+    </section>
+
+    <section class="toolbar">
+      <div class="seg-toggle" id="viewToggle" role="tablist">
+        <button type="button" data-view="board" class="active">▦ Board</button>
+        <button type="button" data-view="list">☰ List</button>
+      </div>
+
+      <div class="chips" id="prioChips">
+        <button type="button" class="chip active" data-prio="all">All</button>
+        <button type="button" class="chip" data-prio="high"><i class="dot high"></i>High</button>
+        <button type="button" class="chip" data-prio="medium"><i class="dot medium"></i>Medium</button>
+        <button type="button" class="chip" data-prio="low"><i class="dot low"></i>Low</button>
+      </div>
+
+      <button id="addBtn" class="btn primary" type="button">＋ New Task <kbd>N</kbd></button>
+    </section>
+
+    <section id="board" class="board"></section>
+
+  </main>
+
+  <footer class="footer">
+    <span>CDAC Kharghar · Docker Mini Project · Build → Push → Deploy</span>
+    <span class="shortcuts"><kbd>N</kbd> new &nbsp; <kbd>/</kbd> search &nbsp; <kbd>V</kbd> view &nbsp; <kbd>T</kbd> theme &nbsp; <kbd>Esc</kbd> close</span>
+  </footer>
+
+  <!-- Task modal -->
+  <div id="taskModal" class="modal hidden">
+    <form id="taskForm" class="modal-card">
+      <div class="modal-head">
+        <h3 id="taskModalTitle">New Task</h3>
+        <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
+      </div>
+
+      <label>Title
+        <input id="tTitle" maxlength="120" required placeholder="e.g. Finish Docker lab">
+      </label>
+
+      <label>Description
+        <textarea id="tDesc" rows="3" maxlength="500" placeholder="Optional details"></textarea>
+      </label>
+
+      <div class="field">
+        <span class="field-label">Priority</span>
+        <div class="seg">
+          <label><input type="radio" name="prio" value="low"><span class="p-low">Low</span></label>
+          <label><input type="radio" name="prio" value="medium" checked><span class="p-medium">Medium</span></label>
+          <label><input type="radio" name="prio" value="high"><span class="p-high">High</span></label>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Status
+          <select id="tStatus">
+            <option value="todo">📋 To Do</option>
+            <option value="progress">🚀 In Progress</option>
+            <option value="done">✅ Done</option>
+          </select>
+        </label>
+        <label>Due date
+          <input id="tDue" type="date">
+        </label>
+      </div>
+
+      <div class="quick-dates">
+        <button type="button" class="chip" data-days="0">Today</button>
+        <button type="button" class="chip" data-days="1">Tomorrow</button>
+        <button type="button" class="chip" data-days="7">Next week</button>
+        <button type="button" class="chip" data-days="clear">Clear</button>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save task</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Profile modal -->
+  <div id="profileModal" class="modal hidden">
+    <form id="profileForm" class="modal-card">
+      <div class="modal-head">
+        <h3>My Profile</h3>
+        <button type="button" class="icon-btn" data-close aria-label="Close">✕</button>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Pick an avatar</span>
+        <div id="avatarPicker" class="avatar-picker"></div>
+      </div>
+
+      <label>Full name
+        <input id="pName" maxlength="60" required placeholder="Your name">
+      </label>
+      <label>Email
+        <input id="pEmail" type="email" maxlength="100" placeholder="you@example.com">
+      </label>
+      <label>Course / Batch
+        <input id="pCourse" maxlength="80" placeholder="e.g. DevOps - Aug 2026">
+      </label>
+      <label>About me
+        <textarea id="pBio" rows="2" maxlength="200" placeholder="A short bio"></textarea>
+      </label>
+
+      <div class="backup">
+        <span class="field-label">Backup (data lives in this browser)</span>
+        <div class="backup-btns">
+          <button type="button" id="exportBtn" class="btn ghost small">⬇ Export</button>
+          <button type="button" id="importBtn" class="btn ghost small">⬆ Import</button>
+          <button type="button" id="clearBtn" class="btn danger small">Clear all</button>
+          <input id="importFile" type="file" accept="application/json" hidden>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save profile</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status">
+    <span id="toastMsg"></span>
+    <button id="toastAction" class="toast-btn hidden" type="button"></button>
+  </div>
+
+  <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
